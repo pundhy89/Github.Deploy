@@ -1,0 +1,5 @@
+{
+  "buildCommand": "npm run build || yarn build || pnpm build || echo 'No build step'",
+  "outputDirectory": "dist",
+  "framework": "vite"
+}
