@@ -1,0 +1,8 @@
+{
+  "name": "Github Deploy",
+  "description": "Upload ZIP to GitHub, edit files, manage APK releases, and auto-deploy to Vercel easily.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
