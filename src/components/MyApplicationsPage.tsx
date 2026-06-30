@@ -66,14 +66,14 @@ export function MyApplicationsPage({ tokens, repos, onSelectRepo }: { tokens: Ap
         </span>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {deployedApps.map(app => (
           <a
             key={app.project.id}
             href={`https://${app.deployment.url}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="group bg-white dark:bg-gray-900 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] dark:hover:shadow-[0_20px_40px_rgb(0,0,0,0.3)] border border-gray-100 dark:border-gray-800 hover:border-blue-200 dark:hover:border-blue-800 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col transform hover:-translate-y-1 block"
+            className="aspect-[2/1] group bg-white dark:bg-gray-900 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] dark:hover:shadow-[0_20px_40px_rgb(0,0,0,0.3)] border border-gray-100 dark:border-gray-800 hover:border-blue-200 dark:hover:border-blue-800 transition-all duration-300 cursor-pointer overflow-hidden flex flex-col transform hover:-translate-y-1 block"
           >
             <div className="p-6 flex-1">
               <div className="flex items-start justify-between mb-4">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Github, LayoutGrid, AlertCircle, Plus, Wrench, FileText, Moon, Sun, MonitorSmartphone } from 'lucide-react';
+import { Settings, Github, LayoutGrid, Plus, Wrench, FileText, Moon, Sun, MonitorSmartphone, LogIn, LogOut, RefreshCw, Triangle } from 'lucide-react';
 import { TokenManager } from './components/TokenManager';
 import { FileExplorer } from './components/FileExplorer';
 import { DeployManager } from './components/DeployManager';
@@ -9,6 +9,9 @@ import { ReadmeTemplatePage } from './components/ReadmeTemplatePage';
 import { MyApplicationsPage } from './components/MyApplicationsPage';
 import { AppTokens, GithubRepo } from './types';
 import { getUserRepos, createRepo, createOrUpdateFile, getRepoTree } from './lib/github';
+import { auth, db } from './lib/firebase';
+import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function App() {
   const [tokens, setTokens] = useState<AppTokens>({ github: '', vercel: '' });
@@ -23,6 +26,59 @@ export default function App() {
   
   const [newRepoName, setNewRepoName] = useState('');
   const [creatingRepo, setCreatingRepo] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        try {
+          const docRef = doc(db, 'users', currentUser.uid, 'secrets', 'tokens');
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setTokens({
+              github: data.githubToken || '',
+              vercel: data.vercelToken || ''
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching tokens:", error);
+        }
+      } else {
+        const saved = localStorage.getItem('gitdeploy_tokens');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            setTokens(parsed);
+          } catch (e) {}
+        } else {
+          setShowTokens(true);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Login failed", error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setTokens({ github: '', vercel: '' });
+      setShowMenu(false);
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
 
   useEffect(() => {
     if (darkMode) {
@@ -32,31 +88,27 @@ export default function App() {
     }
   }, [darkMode]);
 
-  useEffect(() => {
-    const saved = localStorage.getItem('gitdeploy_tokens');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setTokens(parsed);
-      } catch (e) {}
-    } else {
-      setShowTokens(true);
+  const loadRepos = async () => {
+    if (!tokens.github) {
+      setRepos([]);
+      return;
     }
-  }, []);
+    setIsRefreshing(true);
+    setRepoError('');
+    try {
+      const fetchedRepos = await getUserRepos(tokens.github);
+      setRepos(fetchedRepos);
+    } catch (err: any) {
+      console.error('Failed to load repos:', err);
+      setRepoError(err.message || 'Failed to load repositories. Please check your GitHub token.');
+      setRepos([]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    if (tokens.github) {
-      setRepoError('');
-      getUserRepos(tokens.github)
-        .then(setRepos)
-        .catch(err => {
-          console.error('Failed to load repos:', err);
-          setRepoError(err.message || 'Failed to load repositories. Please check your GitHub token.');
-          setRepos([]);
-        });
-    } else {
-      setRepos([]);
-    }
+    loadRepos();
   }, [tokens.github]);
 
   const handleCreateRepo = async (e: React.FormEvent) => {
@@ -116,56 +168,97 @@ export default function App() {
           </div>
           
           {showMenu && (
-            <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 z-50">
+            <div className="absolute top-full left-0 mt-3 w-24 bg-white/50 dark:bg-gray-900/50 backdrop-blur-md border border-white/20 dark:border-gray-700/50 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.1)] p-2 z-50 flex flex-col gap-1 origin-top-left animate-in fade-in slide-in-from-top-4 duration-300">
               <button 
                 onClick={() => { setCurrentView('dashboard'); setShowMenu(false); }}
-                className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 ${currentView === 'dashboard' ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'}`}
+                className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${currentView === 'dashboard' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'}`}
               >
-                <LayoutGrid size={16} /> Dashboard
+                <LayoutGrid size={24} className="mb-1" />
+                <span className="text-[10px] font-medium text-center">Dashboard</span>
               </button>
               <button 
                 onClick={() => { setCurrentView('my-applications'); setShowMenu(false); }}
-                className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 ${currentView === 'my-applications' ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'}`}
+                className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${currentView === 'my-applications' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'}`}
               >
-                <MonitorSmartphone size={16} /> My Applications
+                <MonitorSmartphone size={24} className="mb-1" />
+                <span className="text-[10px] font-medium text-center leading-tight">My Apps</span>
               </button>
               <button 
                 onClick={() => { setCurrentView('readme-template'); setShowMenu(false); }}
-                className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 ${currentView === 'readme-template' ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'}`}
+                className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${currentView === 'readme-template' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'}`}
               >
-                <FileText size={16} /> README Template
+                <FileText size={24} className="mb-1" />
+                <span className="text-[10px] font-medium text-center leading-tight">README</span>
               </button>
               <button 
                 onClick={() => { setCurrentView('maintenance'); setShowMenu(false); }}
-                className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 ${currentView === 'maintenance' ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'}`}
+                className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all ${currentView === 'maintenance' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'}`}
               >
-                <Wrench size={16} /> Maintenance & Repair
+                <Wrench size={24} className="mb-1" />
+                <span className="text-[10px] font-medium text-center leading-tight">Tools</span>
               </button>
+              
+              <div className="my-1 border-t border-gray-200/50 dark:border-gray-700/50 mx-2"></div>
+              
+              <button 
+                onClick={() => { setDarkMode(!darkMode); setShowMenu(false); }}
+                className="flex flex-col items-center justify-center p-3 rounded-xl transition-all text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
+              >
+                {darkMode ? <Sun size={24} className="mb-1" /> : <Moon size={24} className="mb-1" />}
+                <span className="text-[10px] font-medium text-center leading-tight">Theme</span>
+              </button>
+              
+              <button 
+                onClick={() => { setShowTokens(true); setShowMenu(false); }}
+                className="flex flex-col items-center justify-center p-3 rounded-xl transition-all text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
+              >
+                <Settings size={24} className="mb-1" />
+                <span className="text-[10px] font-medium text-center leading-tight">Settings</span>
+              </button>
+
+              <div className="my-1 border-t border-gray-200/50 dark:border-gray-700/50 mx-2"></div>
+
+              {user ? (
+                <button 
+                  onClick={handleLogout}
+                  className="flex flex-col items-center justify-center p-3 rounded-xl transition-all text-red-500 hover:bg-red-50/50 dark:hover:bg-red-900/20"
+                >
+                  <LogOut size={24} className="mb-1" />
+                  <span className="text-[10px] font-medium text-center leading-tight">Logout</span>
+                </button>
+              ) : (
+                <button 
+                  onClick={() => { handleLogin(); setShowMenu(false); }}
+                  className="flex flex-col items-center justify-center p-3 rounded-xl transition-all text-blue-600 dark:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/20"
+                >
+                  <LogIn size={24} className="mb-1" />
+                  <span className="text-[10px] font-medium text-center leading-tight">Login</span>
+                </button>
+              )}
             </div>
           )}
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm">
-            <div className={`w-2 h-2 rounded-full ${tokens.github ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-gray-600 dark:text-gray-400">GitHub</span>
+          <div className="flex items-center gap-3 text-sm">
+            <div className="flex items-center gap-1.5" title="GitHub Status">
+              <Github size={16} className="text-gray-700 dark:text-gray-300" />
+              <div className={`w-2 h-2 rounded-full ${tokens.github ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`} />
+            </div>
             
-            <div className={`w-2 h-2 rounded-full ml-2 ${tokens.vercel ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-gray-600 dark:text-gray-400">Vercel</span>
+            <div className="flex items-center gap-1.5" title="Vercel Status">
+              <Triangle size={16} className="text-gray-700 dark:text-gray-300 rotate-180 fill-current" />
+              <div className={`w-2 h-2 rounded-full ${tokens.vercel ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'}`} />
+            </div>
           </div>
-          
-          <button 
-            onClick={() => setDarkMode(!darkMode)}
-            className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-          >
-            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
 
-          <button 
-            onClick={() => setShowTokens(true)}
-            className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+          <button
+            onClick={loadRepos}
+            disabled={!tokens.github || isRefreshing}
+            className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors disabled:opacity-50"
+            title="Refresh Repositories"
           >
-            <Settings size={20} />
+            <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
           </button>
         </div>
       </header>

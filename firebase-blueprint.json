@@ -1,0 +1,34 @@
+{
+  "entities": {
+    "UserTokens": {
+      "title": "User Tokens",
+      "description": "Stores user's API tokens for GitHub and Vercel",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The UID of the user who owns these tokens"
+        },
+        "githubToken": {
+          "type": "string",
+          "description": "GitHub Personal Access Token"
+        },
+        "vercelToken": {
+          "type": "string",
+          "description": "Vercel Access Token"
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Timestamp when the tokens were last updated"
+        }
+      },
+      "required": ["userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/secrets/tokens": {
+      "schema": "UserTokens",
+      "description": "Stores the user's secret tokens. Isolated in a subcollection for security."
+    }
+  }
+}

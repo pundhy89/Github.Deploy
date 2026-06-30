@@ -33,9 +33,12 @@ export function FileExplorer({ tokens, repoFullName }: { tokens: AppTokens; repo
     const file = e.target.files?.[0];
     if (!file) return;
     
+    // Check if user wants to clear existing files (to prevent duplicates/leftovers)
+    const overwriteAll = confirm('Do you want to clear all existing files in this repository before extracting the ZIP? \n\nClick "OK" to replace everything with the ZIP contents (clean overwrite).\nClick "Cancel" to just add/update files and keep existing ones.');
+    
     setUploading(true);
     try {
-      await uploadZipToGithub(tokens.github, repoFullName, 'main', file, setProgressMsg);
+      await uploadZipToGithub(tokens.github, repoFullName, 'main', file, setProgressMsg, overwriteAll);
       await loadFiles();
     } catch (err: any) {
       alert(`Upload failed: ${err.message}`);

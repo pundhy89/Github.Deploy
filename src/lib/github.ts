@@ -93,7 +93,8 @@ export async function uploadRawFilesToGithub(
   branch: string,
   files: { path: string; content: string; isBinary: boolean }[],
   commitMessage: string,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
+  overwriteAll: boolean = false
 ) {
   if (files.length === 0) throw new Error('No files to upload');
 
@@ -142,7 +143,7 @@ export async function uploadRawFilesToGithub(
   // 3. Create Tree
   onProgress?.('Creating Git tree...');
   const treeBody: any = { tree: treeEntries };
-  if (baseTreeSha) treeBody.base_tree = baseTreeSha;
+  if (baseTreeSha && !overwriteAll) treeBody.base_tree = baseTreeSha;
   
   const treeRes = await fetch(`${API_BASE}/repos/${fullName}/git/trees`, {
     method: 'POST',
@@ -193,18 +194,36 @@ export async function uploadZipToGithub(
   fullName: string,
   branch: string,
   zipBlob: File | Blob,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
+  overwriteAll: boolean = false
 ) {
   const zip = new JSZip();
   const unzipped = await zip.loadAsync(zipBlob);
   const files: { path: string; content: string; isBinary: boolean }[] = [];
 
   onProgress?.('Extracting ZIP...');
-  for (const [path, file] of Object.entries(unzipped.files)) {
+  
+  // Find common root directory if it exists
+  const allPaths = Object.keys(unzipped.files).filter(p => !unzipped.files[p].dir && !p.includes('__MACOSX') && !p.includes('.DS_Store'));
+  let commonPrefix = '';
+  if (allPaths.length > 0) {
+    const firstPathParts = allPaths[0].split('/');
+    if (firstPathParts.length > 1) {
+      const potentialPrefix = firstPathParts[0] + '/';
+      if (allPaths.every(p => p.startsWith(potentialPrefix))) {
+        commonPrefix = potentialPrefix;
+      }
+    }
+  }
+
+  for (const [originalPath, file] of Object.entries(unzipped.files)) {
     if (file.dir) continue;
     
     // Ignore common macOS hidden files / folders
-    if (path.includes('__MACOSX') || path.includes('.DS_Store')) continue;
+    if (originalPath.includes('__MACOSX') || originalPath.includes('.DS_Store')) continue;
+    
+    // Strip common prefix if exists
+    const path = commonPrefix ? originalPath.substring(commonPrefix.length) : originalPath;
 
     // Check if it's binary or text
     const isBinary = /\.(png|jpg|jpeg|gif|ico|zip|apk|pdf|woff|woff2|ttf|eot)$/i.test(path);
@@ -212,7 +231,7 @@ export async function uploadZipToGithub(
     files.push({ path, content, isBinary });
   }
 
-  await uploadRawFilesToGithub(token, fullName, branch, files, 'Upload files from ZIP via Github Deploy', onProgress);
+  await uploadRawFilesToGithub(token, fullName, branch, files, 'Upload files from ZIP via Github Deploy', onProgress, overwriteAll);
   onProgress?.('Upload complete!');
   return true;
 }

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Github, Play, KeyRound, Save, CheckCircle2, AlertCircle } from 'lucide-react';
 import { AppTokens } from '../types';
+import { auth, db } from '../lib/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 interface TokenManagerProps {
   tokens: AppTokens;
@@ -12,9 +14,24 @@ export function TokenManager({ tokens, setTokens, onClose }: TokenManagerProps) 
   const [localTokens, setLocalTokens] = useState<AppTokens>(tokens);
   const [saved, setSaved] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setTokens(localTokens);
-    localStorage.setItem('gitdeploy_tokens', JSON.stringify(localTokens));
+    
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser.uid, 'secrets', 'tokens'), {
+          userId: auth.currentUser.uid,
+          githubToken: localTokens.github,
+          vercelToken: localTokens.vercel,
+          updatedAt: Date.now()
+        });
+      } catch (error) {
+        console.error("Failed to save tokens to Firestore:", error);
+      }
+    } else {
+      localStorage.setItem('gitdeploy_tokens', JSON.stringify(localTokens));
+    }
+
     setSaved(true);
     setTimeout(() => {
       setSaved(false);
@@ -68,7 +85,7 @@ export function TokenManager({ tokens, setTokens, onClose }: TokenManagerProps) 
 
           <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg flex items-start gap-3 text-yellow-800 dark:text-yellow-200 text-sm border border-yellow-100 dark:border-yellow-900/50">
             <AlertCircle size={16} className="shrink-0 mt-0.5" />
-            <p>Your tokens are stored locally in your browser's localStorage and are never sent to our servers. They are directly used to communicate with GitHub and Vercel APIs.</p>
+            <p>{auth.currentUser ? 'Your tokens are stored securely in your Firebase account.' : 'Your tokens are stored locally in your browser\'s localStorage. Sign in to sync them across devices.'}</p>
           </div>
         </div>
 
